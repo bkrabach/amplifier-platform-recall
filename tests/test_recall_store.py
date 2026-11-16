@@ -1,27 +1,10 @@
-import asyncio
-from copy import deepcopy
 import json
-from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 from amplifier_recall import RecallStore
-from amplifier_web.service import AppService, AppError
-from test_service import Runtime
-
-
-async def make(app,title='Source',text='The decision was violet.'):
-    await app.dispatch('session.create',{'title':title})
-    row=app._session()
-    app._message(row,'user',text,'text',inputOrigin='ui')
-    app._publish()
-    return row['id']
-
-
-async def refresh(app):
-    await app.dispatch('recall.refresh',{'sessionId':app._session()['id']})
-    await app.recall.task
-    assert app.recall.state['status']=='ready'
+from amplifier_recall.personalization import Personalization
 
 
 def test_fts_ranks_entire_5000_conversation_library_and_isolates_scopes(tmp_path):
@@ -41,254 +24,78 @@ def test_fts_ranks_entire_5000_conversation_library_and_isolates_scopes(tmp_path
     finally:store.close()
 
 
-async def test_index_incremental_retrieval_and_current_revision_preserve_passive_state(tmp_path,monkeypatch):
-    app=AppService(tmp_path/'app',workspace=tmp_path,runtime=Runtime())
+def test_note_receipts_and_rollback_survive_reopen_without_deleted_text(tmp_path):
+    path = tmp_path / 'recall.db'
+    provenance = {'origin': 'ui', 'sessionId': 'source'}
+    create = {'scope': 'workspace', 'target': 'workspace', 'text': 'Use violet.'}
+    store = RecallStore(path)
     try:
-        sid=await make(app)
-        selected=await make(app,'Current','Continue independent work.')
-        await app.dispatch('view.update',{'patch':{'draft':'Unsent choice'}})
-        import amplifier_web.history_query as query
-        original=query._rows;reads=[]
-        def counted(row):reads.append(row['id']);return original(row)
-        monkeypatch.setattr(query,'_rows',counted)
-        await refresh(app)
-        assert set(reads)=={sid,selected}
-        reads.clear();await refresh(app);assert reads==[]
-        result=await app.app_bridge('dispatch',{'action':'recall.search','args':{'query':'violet','scope':'all'}},selected)
-        match=result['result']['items'][0]
-        read=await app.dispatch('recall.read',{'sessionId':selected,'sourceSessionId':sid,'messageId':match['messageId'],'sourceRevision':match['sourceRevision']})
-        assert 'violet' in read['result']['text'] and read['result']['verifiedAt']
-        app._session(sid)['messages'][0]['text']='The decision was orange.'
-        with pytest.raises(AppError,match='source changed'):
-            await app.dispatch('recall.read',{'sessionId':selected,'sourceSessionId':sid,'messageId':match['messageId'],'sourceRevision':match['sourceRevision']})
-        await refresh(app)
-        assert not (await app.dispatch('recall.search',{'sessionId':selected,'query':'violet','scope':'all'}))['result']['items']
-        assert app.state['selectedSessionId']==selected and app.state['view']['draft']=='Unsent choice'
-        assert not app.runtime.sent
-    finally:await app.close()
-
-
-async def test_memory_scope_correction_cas_retries_and_deletion_leave_no_saved_versions(tmp_path):
-    app=AppService(tmp_path/'app',workspace=tmp_path)
-    try:
-        sid=await make(app)
-        source_row=app._session(sid)
-        original=deepcopy(source_row['messages'])
-        args={'sessionId':sid,'scope':'task','text':'Use violet.'}
-        note=(await app.dispatch('memory.create',args,command_id='remember'))['result']
-        assert (await app.dispatch('memory.create',args,command_id='remember'))['result']['duplicate']
-        changed=(await app.dispatch('memory.update',{'sessionId':sid,'id':note['id'],'expectedRevision':1,'text':'Use orange.'}))['result']
-        with pytest.raises(AppError):
-            await app.dispatch('memory.update',{'sessionId':sid,'id':note['id'],'expectedRevision':1,'text':'Use stale blue.'})
-        record=(await app.dispatch('memory.read',{'sessionId':sid,'id':note['id']}))['result']
-        assert record['text']=='Use orange.' and len(record['versions'])==2
-        other=await make(app,'Other')
-        assert not (await app.dispatch('memory.list',{'sessionId':other}))['result']['items']
-        with pytest.raises(AppError,match='outside'):
-            await app.dispatch('memory.read',{'sessionId':other,'id':note['id']})
-        all_notes=(await app.dispatch('memory.list',{'sessionId':other,'scope':'all'}))['result']['items']
-        assert all_notes[0]['id']==note['id']
-        assert (await app.dispatch('memory.read',{'sessionId':other,'id':note['id'],'allScopes':True}))['result']['id']==note['id']
-        # An explicit all-scopes operation can still inspect and remove an orphaned note.
-        app.state['sessions']=[row for row in app.state['sessions'] if row['id']!=sid]
-        assert (await app.dispatch('memory.list',{'sessionId':other,'scope':'all'}))['result']['items'][0]['id']==note['id']
-        delete={'sessionId':other,'id':note['id'],'expectedRevision':changed['revision'],'allScopes':True}
-        await app.dispatch('memory.delete',delete,command_id='forget')
-        assert (await app.dispatch('memory.delete',delete,command_id='forget'))['result']['duplicate']
-        assert app.recall.store.db.execute('SELECT COUNT(*) FROM memory_versions').fetchone()[0]==0
-        assert 'Use violet.' not in json.dumps(app.recall.store.db.execute('SELECT * FROM memory_receipts').fetchall())
-        assert source_row['messages']==original
-    finally:await app.close()
-
-
-async def test_agent_memory_requires_real_user_provenance_and_survives_restart(tmp_path):
-    app=AppService(tmp_path/'app',workspace=tmp_path)
-    sid=await make(app,text='Remember that this report uses corrected measurements.')
-    source=app._session(sid)['messages'][0]['id']
-    args={'action':'memory.create','args':{'scope':'workspace','text':'Use corrected measurements.'},'id':'agent-memory'}
-    with pytest.raises(AppError,match='attributable'):
-        await app.app_bridge('dispatch',args,sid)
-    app._message(app._session(sid),'user','Forged memory instruction','text',inputOrigin='agent')
-    args['args']['authorizationMessageId']=app._session(sid)['messages'][-1]['id']
-    with pytest.raises(AppError,match='attributable'):
-        await app.app_bridge('dispatch',args,sid)
-    args['args']['authorizationMessageId']=source
-    saved=(await app.app_bridge('dispatch',args,sid))['result']
-    await app.close()
-    restored=AppService(tmp_path/'app',workspace=tmp_path)
-    try:
-        notes=(await restored.dispatch('memory.list',{'sessionId':sid}))['result']['items']
-        assert notes[0]['id']==saved['id'] and notes[0]['provenance']['authorizationMessageId']==source
-        assert (tmp_path/'app/recall.sqlite3').stat().st_mode & 0o777==0o600
-    finally:await restored.close()
-
-
-async def test_unavailable_source_is_explicit_partial_coverage(tmp_path,monkeypatch):
-    app=AppService(tmp_path/'app',workspace=tmp_path)
-    try:
-        await make(app)
-        import amplifier_web.history_query as query
-        monkeypatch.setattr(query,'_rows',lambda _: (_ for _ in ()).throw(OSError('missing')))
-        await app.dispatch('recall.refresh',{'sessionId':app._session()['id']})
-        await app.recall.task
-        result=(await app.dispatch('recall.search',{'sessionId':app._session()['id'],'query':'violet'}))['result']
-        assert result['coverage']['status']=='partial' and result['coverage']['errorCount']==1
-        assert result['items']==[]
-    finally:await app.close()
-
-
-async def test_native_evidence_is_read_only_and_external_edits_invalidate(tmp_path,monkeypatch):
-    monkeypatch.setenv('AMPLIFIER_HOME',str(tmp_path/'shared'))
-    from test_automatic_history import native_session,files_snapshot
-    folder=native_session(tmp_path/'source','native-recall',[{'role':'user','content':'Original cobalt decision.'},{'role':'assistant','content':'Approved cobalt.'}])
-    before=files_snapshot(folder)
-    app=AppService(tmp_path/'app',workspace=tmp_path/'source')
-    try:
-        sid=await make(app,'Current','Current work')
-        await app.history.refresh()
-        await refresh(app)
-        match=(await app.dispatch('recall.search',{'sessionId':sid,'query':'original cobalt','scope':'all'}))['result']['items'][0]
-        assert files_snapshot(folder)==before
-        (folder/'transcript.jsonl').write_text(json.dumps({'role':'user','content':'Corrected orange decision.'})+'\n')
-        with pytest.raises(AppError,match='source changed'):
-            await app.dispatch('recall.read',{'sessionId':sid,'sourceSessionId':match['sessionId'],'messageId':match['messageId'],'sourceRevision':match['sourceRevision']})
-        await refresh(app)
-        found=(await app.dispatch('recall.search',{'sessionId':sid,'query':'corrected orange','scope':'all'}))['result']['items']
-        assert len(found)==1 and found[0]['sessionId']==match['sessionId']
-    finally:await app.close()
-
-
-async def test_task_and_output_metadata_are_indexed_with_exact_correction_revisions(tmp_path):
-    app=AppService(tmp_path/'app',workspace=tmp_path,runtime=Runtime())
-    try:
-        sid=await make(app)
-        app.state.setdefault('runtimeControl',{})[sid]={'task.get':{'task':{'id':'saved-task','revision':1,'objective':'Investigate harbor routes','status':'active','constraints':['Preserve originals'],'corrections':[]}}}
-        output=(await app.dispatch('outputs.write',{'sessionId':sid,'title':'Orchid dataset memo','content':'Exact output content','variant':'document'}))['result']
-        await refresh(app)
-        task=(await app.dispatch('recall.search',{'sessionId':sid,'query':'harbor','scope':'task'}))['result']['items'][0]
-        artifact=(await app.dispatch('recall.search',{'sessionId':sid,'query':'orchid','scope':'task'}))['result']['items'][0]
-        assert task['sourceKind']=='task' and task['recordRevision']==1
-        assert artifact['sourceKind']=='output' and artifact['recordId']==output['id']
-        app.state['runtimeControl'][sid]['task.get']['task'].update(revision=2,objective='Investigate river routes')
-        with pytest.raises(AppError,match='source changed'):
-            await app.dispatch('recall.read',{'sessionId':sid,'sourceSessionId':sid,'messageId':task['messageId'],'sourceRevision':task['sourceRevision']})
-        await app.dispatch('outputs.unlink',{'sessionId':sid,'id':output['id'],'expectedRevision':1})
-        await refresh(app)
-        assert not (await app.dispatch('recall.search',{'sessionId':sid,'query':'orchid'}))['result']['items']
-        result=(await app.dispatch('recall.search',{'sessionId':sid,'query':'river'}))['result']['items'][0]
-        read=(await app.dispatch('recall.read',{'sessionId':sid,'sourceSessionId':sid,'messageId':result['messageId'],'sourceRevision':result['sourceRevision']}))['result']
-        assert read['recordRevision']==2 and 'river' in read['text']
-        assert not app.runtime.sent
-    finally:await app.close()
-
-
-async def test_internal_recall_is_explicit_without_deleting_index_or_source(tmp_path):
-    app = AppService(tmp_path / 'app', workspace=tmp_path, runtime=Runtime())
-    try:
-        job = await make(app, 'Job', 'synthetic violet')
-        app._session(job)['sessionKind'] = 'internal'
-        root = await make(app, 'Human chat', 'independent conversation')
-        await refresh(app)
-        original = deepcopy(app._session(job)['messages'])
-        for options in ({}, {'includeChildren': True}):
-            result = await app.dispatch('recall.search', {'sessionId': root, 'query': 'violet', **options})
-            assert result['result']['items'] == []
-        result = await app.dispatch('recall.search', {'sessionId': root, 'query': 'violet', 'includeInternal': True})
-        match = result['result']['items'][0]
-        assert match['sessionId'] == job
-        read = await app.dispatch('recall.read', {'sessionId': root, 'sourceSessionId': job,
-            'messageId': match['messageId'], 'sourceRevision': match['sourceRevision']})
-        assert read['result']['text'] == 'synthetic violet'
-        assert app._session(job)['messages'] == original
+        saved = store.mutate('memory.create', create, command_id='create', provenance=provenance)
+        with pytest.raises(RuntimeError, match='rollback'):
+            with store.atomic():
+                store.mutate('memory.create', {**create, 'text': 'Discard this note.'},
+                             command_id='rolled-back', provenance=provenance)
+                raise RuntimeError('rollback')
     finally:
-        await app.close()
+        store.close()
 
-
-async def test_dormant_recall_membership_survives_refresh_without_live_admission(tmp_path, monkeypatch):
-    app = AppService(tmp_path/'app', workspace=tmp_path, runtime=Runtime())
+    store = RecallStore(path)
     try:
-        dormant = await make(app, 'Dormant source', 'The dormant decision was cobalt.')
-        worker = await make(app, 'Saved worker', 'Worker cobalt evidence.')
-        app._session(worker).update(sessionKind='worker', parentId=dormant)
-        other = await make(app, 'Other workspace', 'Other cobalt evidence.')
-        app._session(other)['workspace'] = str(tmp_path/'other')
-        caller = await make(app, 'Current', 'Keep current work separate.')
-        app.state.setdefault('runtimeControl', {})[dormant] = {
-            'task.get': {'task': {'id':'durable-task', 'revision':2, 'objective':'Remember heliotrope', 'status':'complete'}}}
-        app._save()
-        await refresh(app)
-        before = set(app.recall.store.signatures())
-        app.state['sessions'] = [app._session(caller)]
-        app.state['runtimeControl'] = {key:value for key,value in app.state['runtimeControl'].items() if key == caller}
-        app.projections.invalidate()
-        admitted = app._session
-        def current_only(identity=None, *args, **kwargs):
-            assert identity in {None, caller}, 'recall refresh/search admitted a dormant conversation'
-            return admitted(identity, *args, **kwargs)
-        monkeypatch.setattr(app, '_session', current_only)
-        original_decode = app.directory.decode
-        def no_summary(*args, **kwargs):
-            pytest.fail('ordinary recall authorization decoded dormant directory metadata')
-        monkeypatch.setattr(app.directory, 'decode', no_summary)
-        result = await app.recall.dispatch('recall.search', {'sessionId':caller, 'query':'cobalt'}, 'ui')
-        assert [row['sessionId'] for row in result['result']['items']] == [dormant]
-        all_rows = await app.recall.dispatch('recall.search',
-            {'sessionId':caller, 'query':'cobalt', 'scope':'all', 'includeChildren':True}, 'ui')
-        assert {row['sessionId'] for row in all_rows['result']['items']} == {dormant, worker, other}
-        monkeypatch.setattr(app.directory, 'decode', original_decode)
-        await app.recall.refresh()
-        assert app.recall.state['status'] == 'ready'
-        assert set(app.recall.store.signatures()) == before
-        assert [row['id'] for row in app.state['sessions']] == [caller]
-        task = await app.recall.dispatch('recall.search', {'sessionId':caller, 'query':'heliotrope'}, 'ui')
-        assert task['result']['items'][0]['recordRevision'] == 2
-        assert not app.runtime.sent
-        # Explicit membership removal withdraws search access immediately and
-        # prunes only that source on the next explicit index refresh.
-        app.state['sharedHistory'] = {'reconciliation': {'phase': 'complete'}}
-        app.directory.sync([], app.state, deleted=[dormant])
-        app.db.commit()
-        assert not (await app.recall.dispatch('recall.search',
-            {'sessionId':caller, 'query':'dormant cobalt'}, 'ui'))['result']['items']
-        await app.recall.refresh()
-        assert set(app.recall.store.signatures()) == before - {dormant}
+        assert store.mutate('memory.create', create, command_id='create', provenance=provenance) == {
+            **saved, 'duplicate': True}
+        assert store.db.execute("SELECT COUNT(*) FROM memory_receipts WHERE id='rolled-back'").fetchone()[0] == 0
+        assert [row['id'] for row in store.list_memories(None)['items']] == [saved['id']]
+        changed = store.mutate('memory.update', {'id': saved['id'], 'expectedRevision': 1, 'text': 'Use orange.'},
+                               command_id='update', provenance=provenance)
+        with pytest.raises(ValueError, match='changed'):
+            store.mutate('memory.update', {'id': saved['id'], 'expectedRevision': 1, 'text': 'Stale note.'},
+                         command_id='stale', provenance=provenance)
+        assert [row['text'] for row in store.versions(saved['id'])] == ['Use orange.', 'Use violet.']
+        delete = {'id': saved['id'], 'expectedRevision': changed['revision']}
+        removed = store.mutate('memory.delete', delete, command_id='delete', provenance=provenance)
     finally:
-        monkeypatch.undo()
-        await app.close()
+        store.close()
 
-
-@pytest.mark.parametrize('phase', ['running', 'unavailable', 'not-started'])
-async def test_partial_directory_recovery_never_prunes_undiscovered_recall_sources(tmp_path, phase):
-    app = AppService(tmp_path/'app', workspace=tmp_path, runtime=Runtime())
+    store = RecallStore(path)
     try:
-        caller = await make(app, 'Current', 'Current evidence')
-        app.recall.store.replace({'id':'not-yet-discovered','title':'Saved history','workspace':str(tmp_path)},
-            'saved-signature', 1, [{'id':'prior','role':'user','text':'Keep canonical source evidence'}])
-        app.state['sharedHistory'] = {'reconciliation': {'phase': phase}}
-        await app.recall.refresh()
-        assert 'not-yet-discovered' in app.recall.store.signatures()
-        assert app.recall.state['discoveryComplete'] is False
-        assert [row['id'] for row in app.state['sessions']] == [caller]
+        assert store.mutate('memory.delete', delete, command_id='delete', provenance=provenance) == {
+            **removed, 'duplicate': True}
+        with pytest.raises(ValueError, match='different contents'):
+            store.mutate('memory.create', {**create, 'text': 'Different request.'},
+                         command_id='create', provenance=provenance)
+        assert store.list_memories(None)['items'] == []
+        assert store.db.execute('SELECT COUNT(*) FROM memory_versions').fetchone()[0] == 0
+        receipts = json.dumps(store.db.execute('SELECT * FROM memory_receipts').fetchall())
+        assert all(text not in receipts for text in ('Use violet.', 'Use orange.', 'Discard this note.'))
     finally:
-        await app.close()
+        store.close()
 
 
-async def test_missing_durable_owner_preserves_previous_recall_evidence(tmp_path):
-    app = AppService(tmp_path/'app', workspace=tmp_path, runtime=Runtime())
+def test_personalization_reopen_retains_settings_and_never_replays_claim(tmp_path, monkeypatch):
+    monkeypatch.setattr('amplifier_recall.personalization.time', SimpleNamespace(time=lambda: 1700000000))
+    path = tmp_path / 'recall.db'
+    args = {'expectedRevision': 0, 'contribute': True, 'use': False, 'maxCallsPerDay': 1}
+    provenance = {'origin': 'ui'}
+    store = RecallStore(path)
     try:
-        dormant = await make(app, 'Lost saved pointer', 'Preserve indexed cobalt evidence')
-        caller = await make(app, 'Current', 'Current evidence')
-        app._save()
-        await app.recall.refresh()
-        signature = app.recall.store.signatures()[dormant]
-        app.state['sessions'] = [app._session(caller)]
-        app.db.execute("DELETE FROM state_records WHERE kind='session' AND id=?", (dormant,))
-        app.db.commit()
-        app.state['sharedHistory'] = {'reconciliation': {'phase':'complete'}}
-        await app.recall.refresh()
-        assert app.recall.state['status'] == 'partial'
-        assert app.recall.state['errors'] == [{'sessionId':dormant,'reason':'FileNotFoundError'}]
-        assert app.recall.store.signatures()[dormant] == signature
-        assert [row['id'] for row in app.state['sessions']] == [caller]
+        personalization = Personalization(store)
+        configured = personalization.configure('workspace', args, provenance, 'configure')
+        claim = personalization.claim('workspace', 'source', 'revision-one', 1)
+        assert claim is not None
     finally:
-        await app.close()
+        store.close()
+
+    store = RecallStore(path)
+    try:
+        personalization = Personalization(store)
+        assert personalization.settings('workspace') == configured
+        assert personalization.configure('workspace', args, provenance, 'configure') == {
+            **configured, 'duplicate': True}
+        attempt, = personalization.attempts('workspace')
+        assert attempt['id'] == claim and attempt['sessionId'] == 'source'
+        assert attempt['status'] == 'interrupted' and 'not replayed' in attempt['reason']
+        assert personalization.claim('workspace', 'source', 'revision-one', 1) is None
+        with pytest.raises(ValueError, match='call limit'):
+            personalization.claim('workspace', 'source', 'revision-two', 1)
+    finally:
+        store.close()
