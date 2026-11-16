@@ -1,0 +1,65 @@
+{
+  "schema": 1,
+  "sourceRepository": "https://github.com/microsoft/amplifier-unified",
+  "sourceRevision": "559d388ae4cefbedc048b8af54c72b94216b4e18",
+  "sourceSubdirectory": "components/recall",
+  "importHead": "83d574061262ccf2dca2e9da72af6ea7b0d8386e",
+  "importTree": "8d7fc4df0092b34a07bc8b05c7f2dccff3e2c695",
+  "historyBoundary": "6671b2646c22eddb89250e93525151e6c6379967",
+  "legacyRoot": "amplifier_recall",
+  "historicalTestMappings": {
+    "tests/test_recall.py": "tests/test_recall_store.py",
+    "tests/test_memory_personalization.py": "tests/test_memory_personalization.py"
+  },
+  "commitMap": [
+    {
+      "original": "2797a64564db9db09d937bef544339a7cddcd92b",
+      "imported": "fee8fb396400e404c942c7bbab93af547d85bfef"
+    },
+    {
+      "original": "d736569784f5e8e848530043bca2797170d401a2",
+      "imported": "43ea5dfb44cdecd49a63dca1e80ec5b4e9601e3c"
+    },
+    {
+      "original": "1b56d65228291059ea5a05f232264f3deee128ac",
+      "imported": "68127173dd1108d9a45910632db0a1ca44e8f391"
+    },
+    {
+      "original": "bc355bcb8d72f18bf2911a7a5f5b14b59009e315",
+      "imported": "e4e1e6520e7d7e4645778bcac12fc9e55e1f576f"
+    },
+    {
+      "original": "e7a23d68d08a95e73448d0d79e2a19de43b13f1e",
+      "imported": "d5a696d8e05b7c555996d9cacccad2128d5f9e6e"
+    },
+    {
+      "original": "4da70260f2dfece576fc5514aaa22cf5f96bc629",
+      "imported": "bbf2317d5bdce4e18fd31f00ca9e93967f409c4b"
+    },
+    {
+      "original": "6671b2646c22eddb89250e93525151e6c6379967",
+      "imported": "3964ec63e5e118b97f58fced88074ed5cda2d5cd"
+    },
+    {
+      "original": "24c7b42b72439e5f0030b607ccd12577b5cab5d6",
+      "imported": "d2b691da098e94d03e4bc50e7dd842a4dcb9ca6e"
+    },
+    {
+      "original": "6484bf2d9d8512a07b57a39b857c3137a1cf5434",
+      "imported": "83d574061262ccf2dca2e9da72af6ea7b0d8386e"
+    }
+  ],
+  "files": {
+    ".gitignore": "91ff24eaa65a89ef74d692e164233422924a556a07666dd471ceefc6a31f331f",
+    "LICENSE": "c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383",
+    "MANIFEST.in": "ca4d086a2960c7e0254208f08bf99f5db67adb33599085574b1155e859c7fb0a",
+    "README.md": "7078999a9c27127274acf6a41e32f7e3ab64c730dbdba3940198d7b97daf24a7",
+    "amplifier_recall/__init__.py": "3cdf8988875076c89e82c77e1b7e56410cfcb92fde3f9014210f48211cb873f1",
+    "amplifier_recall/personalization.py": "802272db1fcd057aee2457c7c689cef363333d430b95210c2b1d5a6307122eab",
+    "amplifier_recall/store.py": "1e56f1654de0a520c7a177fdd1fd76a45ffe2b72126fad11b43443f2bfa3d636",
+    "pyproject.toml": "0dd51e0bdfcd509ab667835d442edb0c16d5b5f3d9654821d9a5eae1b3d740ae",
+    "tests/test_recall_store.py": "668ddbe395fc8872d5bb74faab7e23dea9805b5fabdeda16f66948db7ae17692"
+  },
+  "history": "Original author, committer, timestamps, message and projected blob bytes preserved. Path-filtered trees/parents produce new commit IDs. Original signatures remain authoritative in Unified. Historical predecessor tests may depend on Unified; current tests are the exact standalone tests. Generated copies after author relocation are excluded.",
+  "delivery": "Public source import only. Current Unified and other consumer selections remain unchanged; existing immutable releases retain original producer/source identity."
+}

@@ -40,49 +40,41 @@ not establish host permissions, model behavior or native history compatibility.
 The host tests remain in Unified's `tests/test_recall.py` and
 `tests/test_memory_personalization.py`.
 
-## Independent publication
+## Ownership and provenance
 
-The `Recall package` workflow (`.github/workflows/recall-release.yml`) qualifies
-pull requests and publishes only when the release owner explicitly dispatches it
-from `main` with a full merged source commit. Coordinate that owner before choosing
-a version or dispatching publication.
+This history-preserving project is prepared as the public author home at
+`bkrabach/amplifier-platform-recall`, with a later transfer to Microsoft planned.
+[PROVENANCE.json](PROVENANCE.json) records the original public Unified source,
+pre-move history, and exact imported runtime/test bytes. Original MIT attribution
+is preserved. The repository name does not rename the `amplifier-recall`
+distribution or `amplifier_recall` import.
 
-It builds the standalone wheel and sdist once, binds their bytes and included
-source/tests to the selected Git tree, and tests the installed wheel outside the
-checkout without Unified, Core or Foundation. The four release assets are the
-wheel, sdist, `recall-source.json` and `SHA256SUMS`, under `recall-v<VERSION>`.
-Publication does not replace Unified's latest release or change its selected code.
-Existing tags and assets are immutable: a completed exact-byte retry is read-only;
-a partial draft can receive only its missing matching assets. Preserve the original
-four assets for a retry because rebuilding can change archive bytes.
+This import changes no runtime behavior, dependency requirement, package version,
+or maintained test. Unified retains its host integration and policy. Authoring
+handoff and consumer selection are separate reviewed changes; retire Unified’s
+authored project at handoff rather than maintain two authoring copies.
 
-## Unified artifact selection
+Foundation also carries an optional `libraries/recall` package with different
+bounded indexing/query/version APIs. This imported line retains Unified’s
+`Personalization` and receipt-provenance behavior. Neither line replaces the other
+through this move; a later consolidation needs an explicit API and consumer review.
 
-Unified's ordinary wheel, sdist and editable builds consume the generated
-`components/recall-delivery/` snapshot selected by `components/recall.source.json`.
-The selection records the original public wheel, source commit/tree and receipt
-from [recall-v0.1.0](https://github.com/microsoft/amplifier-unified/releases/tag/recall-v0.1.0).
-The authored project remains independent; source edits and publication do not
-change Unified's selected default. Never edit the delivery copy by hand.
+Use a separate environment for this distribution. Do not coinstall it with
+`amplifier-unified`, which currently owns its selected `amplifier_recall` files.
+This source import is not independent pip replacement inside a Unified prefix.
 
-To select a coordinated release, download its original wheel, sdist,
-`recall-source.json` and `SHA256SUMS` into an owned directory. Verify the checksums
-and source receipt against the accepted publication, then run from the Unified root:
+## Existing delivery and future publication
 
-```sh
-python scripts/scheduling_delivery.py select --component recall \
-  --dist "$RECALL_ASSETS" --revision "$RECALL_REVISION" \
-  --receipt-sha256 "$RECALL_RECEIPT_SHA256"
-python scripts/scheduling_delivery.py verify --component recall
-```
+Unified continues to select the immutable [recall-v0.1.0 artifacts](https://github.com/microsoft/amplifier-unified/releases/tag/recall-v0.1.0)
+from their original public producer. The original source receipt, revision,
+subdirectory and hashes remain historical identities; this repository does not
+republish or relabel those artifacts. Unified’s generated `components/recall-delivery/`
+is selected by `components/recall.source.json` and verified offline during
+normal builds. Do not edit that generated copy by hand.
 
-Use the actual published revision and receipt hash, and review the generated copy
-and record together. Normal builds verify the selected bytes offline and include
-the receipt/license in the app wheel. Unified remains the sole installed
-distribution owner; do not coinstall the standalone distribution in its
-environment. No runtime dependency, lock, database path or stored format changes.
-The producer workflow owns standalone tests; Unified keeps its host integration tests.
-
-A future supporting repository may use
-`amplifier-platform-recall`; its creation and handoff are separate decisions from
-the preserved distribution/import names.
+The [package workflow](.github/workflows/package.yml) builds one wheel and source
+archive, then tests that wheel outside the checkout. It does not publish a release
+or change any consumer. A future publication needs an exact source/artifact
+receipt and review of Unified’s selector for this repository-root project layout;
+the existing selector identifies historical monorepo subdirectories. Source moves
+do not reserve a new version or make the original receipts invalid.
