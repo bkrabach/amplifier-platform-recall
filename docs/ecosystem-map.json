@@ -1,0 +1,81 @@
+{
+  "audience": "Developers embedding the documented Python library",
+  "citations": [
+    {
+      "path": "README.md",
+      "ref": "1a4b4757fdf9cbf3686353932ea87ff9d2a7cb62",
+      "sha256": "ca515e2db5a2f9e58bc0b8ff43c698730e950c92ab826e0ff7a5fbd2b39517df",
+      "url": "https://github.com/bkrabach/amplifier-platform-recall/blob/1a4b4757fdf9cbf3686353932ea87ff9d2a7cb62/README.md"
+    },
+    {
+      "path": "PROVENANCE.json",
+      "ref": "1a4b4757fdf9cbf3686353932ea87ff9d2a7cb62",
+      "sha256": "93dd03b6daaa601368463faa6df65c574dbecf8619d49a948fa2e9ffdc33e5cd",
+      "url": "https://github.com/bkrabach/amplifier-platform-recall/blob/1a4b4757fdf9cbf3686353932ea87ff9d2a7cb62/PROVENANCE.json"
+    },
+    {
+      "path": "pyproject.toml",
+      "ref": "1a4b4757fdf9cbf3686353932ea87ff9d2a7cb62",
+      "sha256": "0dd51e0bdfcd509ab667835d442edb0c16d5b5f3d9654821d9a5eae1b3d740ae",
+      "url": "https://github.com/bkrabach/amplifier-platform-recall/blob/1a4b4757fdf9cbf3686353932ea87ff9d2a7cb62/pyproject.toml"
+    }
+  ],
+  "display_name": "Amplifier Platform Recall",
+  "edges": [
+    {
+      "from": "caller",
+      "relation": "uses",
+      "to": "self"
+    },
+    {
+      "from": "self",
+      "relation": "contains",
+      "to": "part-0"
+    },
+    {
+      "from": "self",
+      "relation": "contains",
+      "to": "part-1"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "self",
+      "kind": "self",
+      "label": "Amplifier Platform Recall",
+      "repository": "bkrabach/amplifier-platform-recall"
+    },
+    {
+      "id": "caller",
+      "kind": "external",
+      "label": "Calling application (Python API)"
+    },
+    {
+      "id": "part-0",
+      "kind": "internal",
+      "label": "Search and versioned note store"
+    },
+    {
+      "id": "part-1",
+      "kind": "internal",
+      "label": "Personalization attempt receipts"
+    }
+  ],
+  "notes": [
+    "This is an independent open-source package hosted by bkrabach, not a Microsoft component in the Constellation family index.",
+    "The public source import preserves its Unified provenance. Source ownership, publication and consumer artifact selection are separate reviewed steps; this listing does not change an existing selection.",
+    "Explicit notes, versions and receipts are durable, not disposable search data. This package does not replace native history or the separate memory extraction and verification mechanisms."
+  ],
+  "page_kind": "supporting library",
+  "purpose": "Store conversation search indexes and versioned memory records. An independent Python library.",
+  "ref": "1a4b4757fdf9cbf3686353932ea87ff9d2a7cb62",
+  "repository": "bkrabach/amplifier-platform-recall",
+  "roles": [],
+  "start_cta": {
+    "label": "Read the library guide",
+    "url": "https://github.com/bkrabach/amplifier-platform-recall/blob/1a4b4757fdf9cbf3686353932ea87ff9d2a7cb62/README.md#develop-and-qualify"
+  },
+  "summary": "A SQLite search and note store plus personalization attempt receipts retain caller-supplied evidence. The caller supplies allowed sources and owns context assembly, models and Stop.",
+  "supports_roles": [],
+  "visibility": "public"
+}
