@@ -83,7 +83,7 @@ This source import is not independent pip replacement inside a Unified prefix.
 
 ## Independent artifact publication
 
-Unified continues to select the immutable [recall-v0.1.0 artifacts](https://github.com/microsoft/amplifier-unified/releases/tag/recall-v0.1.0)
+Historical Unified selections use the immutable [recall-v0.1.0 artifacts](https://github.com/microsoft/amplifier-unified/releases/tag/recall-v0.1.0)
 from their original public producer. The original source receipt, revision,
 subdirectory and hashes remain historical identities; this repository does not
 republish or relabel those artifacts. Unified’s generated `components/recall-delivery/`
